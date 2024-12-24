@@ -15,8 +15,8 @@ let sequelize = new Sequelize(process.env.DB_URL, {
   dialectOptions: {
     use_env_variable: 'DB_URL',
     ssl: {
-      require: true, // Jika Supabase membutuhkan SSL
-      rejectUnauthorized: false, // Atur ini ke false untuk Supabase
+      require: true,
+      rejectUnauthorized: false,
     },
   },
 });
