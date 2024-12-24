@@ -120,8 +120,14 @@ class ItemController {
   async deleteItem(req, res, next) {
     try {
       const { id } = req.params;
-      const result = await Item.destroy({ where: { id } });
-      return new SuccessResponse(res, 200, result, "Success");
+      const findImage = await ImageItem.findAll({ where: { itemId: id } })
+      
+      if(findImage.length > 0){
+        const deletedCloudinary = await Promise.all(findImage.map(image => cloudinary.uploader.destroy(image.cloudinaryId)))
+        const deletedDatabaseImageItem = await ImageItem.destroy({ where: { itemId: id } });
+      }
+      const deletedDatabaseProduct = await Item.destroy({ where: { id } });
+      return new SuccessResponse(res, 200, deletedDatabaseProduct, "Success");
     } catch (error) {
       next(error);
     }
