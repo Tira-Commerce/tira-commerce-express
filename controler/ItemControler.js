@@ -1,6 +1,6 @@
 const { Item, User, Category, ImageItem } = require("../models");
 const SuccessResponse = require("../helpers/Success.helper");
-const cloudinary = require('cloudinary').v2;
+const cloudinary = require("cloudinary").v2;
 
 class ItemController {
   async getItem(req, res, next) {
@@ -80,8 +80,9 @@ class ItemController {
   async updateItem(req, res, next) {
     try {
       const { itemId } = req.params;
-      const { categoryId } = req.query
-      const { productName, price, categoryName, size, color, deletedStatus } = req.body;
+      const { categoryId } = req.query;
+      const { productName, price, categoryName, size, color, deletedStatus } =
+        req.body;
       const category = await Category.update(
         { categoryName },
         {
@@ -100,15 +101,58 @@ class ItemController {
       );
 
       if (deletedStatus) {
-        const validData = deletedStatus.replace(/([{,]\s*)(\w+):/g, '$1"$2":')
-        const parseDeletedStatus = JSON.parse(validData);
-        const imageStatus = await Promise.all(parseDeletedStatus.map((data, index) => ImageItem.update({ statusDeleted: data.status }, { where: { id: data.id } })))
-        const imageDeleted = await ImageItem.destroy({ where: { statusDeleted: true } })
-        const cloudinaryDeleted = await Promise.all(parseDeletedStatus.map(data => cloudinary.uploader.destroy(data.cloudinaryId)))
+        if (typeof deletedStatus == "string") {
+          const validData = deletedStatus.replace(
+            /([{,]\s*)(\w+):/g,
+            '$1"$2":'
+          );
+          const parseDeletedStatus = JSON.parse(validData);
+          const imageStatus = await Promise.all(
+            parseDeletedStatus?.map((data, index) =>
+              ImageItem.update(
+                { statusDeleted: data.status },
+                { where: { id: data.id } }
+              )
+            )
+          );
+        } else {
+          const imageStatus = await Promise.all(
+            deletedStatus.map((data, index) =>
+              ImageItem.update(
+                { statusDeleted: data.status },
+                { where: { id: data.id } }
+              )
+            )
+          );
+        }
+
+        const findImage = await ImageItem.findAll({
+          where: { statusDeleted: true },
+        });
+
+        if (findImage.length > 0) {
+          const cloudinaryDeleted = await Promise.all(
+            findImage.map((data) =>
+              cloudinary.uploader.destroy(data.cloudinaryId)
+            )
+          );
+        }
+
+        const imageDeleted = await ImageItem.destroy({
+          where: { statusDeleted: true },
+        });
       }
 
-      if (req.files.length > 0) {
-        const imageUpdate = await Promise.all(req.files.map(file => ImageItem.create({ cloudinaryId: file.filename, url: file.path, itemId })))
+      if (req.files) {
+        const imageUpdate = await Promise.all(
+          req.files.map((file) =>
+            ImageItem.create({
+              cloudinaryId: file.filename,
+              url: file.path,
+              itemId,
+            })
+          )
+        );
       }
 
       return new SuccessResponse(res, 200, result, "Success");
@@ -120,11 +164,17 @@ class ItemController {
   async deleteItem(req, res, next) {
     try {
       const { id } = req.params;
-      const findImage = await ImageItem.findAll({ where: { itemId: id } })
-      
-      if(findImage.length > 0){
-        const deletedCloudinary = await Promise.all(findImage.map(image => cloudinary.uploader.destroy(image.cloudinaryId)))
-        const deletedDatabaseImageItem = await ImageItem.destroy({ where: { itemId: id } });
+      const findImage = await ImageItem.findAll({ where: { itemId: id } });
+
+      if (findImage.length > 0) {
+        const deletedCloudinary = await Promise.all(
+          findImage.map((image) =>
+            cloudinary.uploader.destroy(image.cloudinaryId)
+          )
+        );
+        const deletedDatabaseImageItem = await ImageItem.destroy({
+          where: { itemId: id },
+        });
       }
       const deletedDatabaseProduct = await Item.destroy({ where: { id } });
       return new SuccessResponse(res, 200, deletedDatabaseProduct, "Success");
