@@ -1,4 +1,4 @@
-const { User, Order, Cart, Item, sequelize, Role } = require('../models')
+const { User, Order, Cart, Item, sequelize, Role, ImageUser } = require('../models')
 const Validator = require('fastest-validator')
 const v = new Validator()
 const bcrypt = require('bcrypt')
@@ -8,6 +8,7 @@ dotenv.config({ path: '.env' })
 const JWT_SECRET = process.env.JWT_SECRET
 const SuccessResponse = require('../helpers/Success.helper')
 const ErrorResponse = require('../helpers/error.helper')
+const cloudinary = require("cloudinary").v2;
 
 class UserController {
     async getUser(req, res, next) {
@@ -81,8 +82,20 @@ class UserController {
                     if (validationResult !== true) {
                         throw new ErrorResponse(401, validationResult, 'Validation Failed')
                     } else {
+                        const checkRole = await Role.findOne({ where: { roleName } })
+                        if(checkRole) {
+                            const result = await User.create({ fullName, email, password: hash, address, phone, roleId: checkRole.id })
+                            if(req.file){
+                                const imageProfile = await ImageUser.create({ cloudinaryId: req.file.filename, url: req.file.path, userId: result.id })
+                            }
+                            return new SuccessResponse(res, 200, result, 'Success')
+                        }
+
                         const role = await Role.create({ roleName })
                         const result = await User.create({ fullName, email, password: hash, address, phone, roleId: role.id })
+                        if(req.file){
+                            const imageProfile = await ImageUser.create({ cloudinaryId: req.file.filename, url: req.file.path, userId: result.id })
+                        }
                         return new SuccessResponse(res, 200, result, 'Success')
                     }
                 }
@@ -93,9 +106,21 @@ class UserController {
                 if (validationResult !== true) {
                     throw new ErrorResponse(401, validationResult, 'Validation Failed')
                 } else {
-                    const role2 = await Role.create({ roleName })
-                    const result2 = await User.create({ fullName, email, password: hash, address, phone, roleId: role2.id })
-                    return new SuccessResponse(res, 201, result2, 'Success')
+                    const checkRole = await Role.findOne({ where: { roleName } })
+                    if(checkRole) {
+                        const result = await User.create({ fullName, email, password: hash, address, phone, roleId: checkRole.id })
+                        if(req.file){
+                            const imageProfile = await ImageUser.create({ cloudinaryId: req.file.filename, url: req.file.path, userId: result.id })
+                        }
+                        return new SuccessResponse(res, 201, result, 'Success')
+
+                    }
+                    const role = await Role.create({ roleName })
+                    const result = await User.create({ fullName, email, password: hash, address, phone, roleId: role.id })
+                    if(req.file){
+                        const imageProfile = await ImageUser.create({ cloudinaryId: req.file.filename, url: req.file.path, userId: result.id })
+                    }
+                    return new SuccessResponse(res, 201, result, 'Success')
                 }
 
             }
@@ -147,6 +172,12 @@ class UserController {
                 email: { type: "email", optional: true },
                 password: { type: "string", min: 5, max: 255, optional: true }
             }
+            const salt = bcrypt.genSaltSync(10);
+            const hash = bcrypt.hashSync(password, salt);
+
+            if (!checkUser) {
+                throw new ErrorResponse(401, {}, 'User Not Found')
+            }
 
             if (checkUser) {
                 // Validate Email
@@ -159,11 +190,22 @@ class UserController {
                     if (validationResult !== true) {
                         throw new ErrorResponse(401, validationResult, 'Validation Failed')
                     } else {
-                        const result = await User.update({ fullName, email, password, address, phone }, {
+                        const result = await User.update({ fullName, email, password: hash, address, phone }, {
                             where: {
                                 id
                             }
                         })
+                        if(req.file) {
+                            const checkImageUser = await ImageUser.findOne({ where: { userId: id } })
+                            if(checkImageUser) {
+                                const deleteImageCloudinary = await cloudinary.uploader.destroy(checkImageUser.cloudinaryId)
+                                const updateImageProfile = await ImageUser.update({ cloudinaryId: req.file.filename, url: req.file.path }, { where: { userId: id } })
+    
+                            }else{
+                                const imageProfile = await ImageUser.create({ cloudinaryId: req.file.filename, url: req.file.path, userId: id })
+                            }
+                            
+                        }
                         return new SuccessResponse(res, 200, result, 'Success')
                     }
                 }
@@ -174,11 +216,23 @@ class UserController {
                 if (validationResult !== true) {
                     throw new ErrorResponse(401, validationResult, 'Validation Failed')
                 } else {
-                    const result2 = await User.update({ fullName, email, password, address, phone }, {
+                    const result2 = await User.update({ fullName, email, password: hash, address, phone }, {
                         where: {
                             id
                         }
                     })
+                    if(req.file) {
+                        const checkImageUser = await ImageUser.findOne({ where: { userId: id } })
+                        if(checkImageUser) {
+                            const deleteImageCloudinary = await cloudinary.uploader.destroy(checkImageUser.cloudinaryId)
+                            const updateImageProfile = await ImageUser.update({ cloudinaryId: req.file.filename, url: req.file.path }, { where: { userId: id } })
+
+                        }else{
+                            const imageProfile = await ImageUser.create({ cloudinaryId: req.file.filename, url: req.file.path, userId: id })
+                        }
+                        
+                    }
+                    
                     return new SuccessResponse(res, 200, result2, 'Success')
                 }
             }
@@ -192,6 +246,14 @@ class UserController {
     async deleteUser(req, res, next) {
         try {
             const { id } = req.params
+            const checkUser = await User.findOne({ where: { id } })
+
+            if (!checkUser) {
+                throw new ErrorResponse(401, {}, 'User Not Found')
+            }
+            const checkImageUser = await ImageUser.findOne({ where: { userId: id } })
+            const deletedImageCloudinary = await cloudinary.uploader.destroy(checkImageUser.cloudinaryId)
+            const deletedImageUser = await ImageUser.destroy({ where: { userId: id } })
             const result = await User.destroy({ where: { id } })
             return new SuccessResponse(res, 200, result, 'Success')
         } catch (error) {

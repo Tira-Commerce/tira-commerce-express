@@ -1,5 +1,6 @@
 const { Item, User, Category, ImageItem } = require("../models");
 const SuccessResponse = require("../helpers/Success.helper");
+const ErrorResponse = require("../helpers/error.helper");
 const cloudinary = require("cloudinary").v2;
 
 class ItemController {
@@ -81,81 +82,91 @@ class ItemController {
     try {
       const { itemId } = req.params;
       const { categoryId } = req.query;
-      const { productName, price, categoryName, size, color, deletedStatus } =
-        req.body;
-      const category = await Category.update(
-        { categoryName },
-        {
-          where: {
-            id: categoryId,
-          },
-        }
-      );
-      const result = await Item.update(
-        { productName, price, categoryId: category.id, size, color },
-        {
-          where: {
-            id: itemId,
-          },
-        }
-      );
+      const { productName, price, categoryName, size, color, deletedImage } = req.body;
+      const findProduct = await Item.findOne({ where: { id: itemId } });
+      const findCategory = await Category.findOne({ where: { id: categoryId } });
+     
+     if(!findProduct) {
+      throw new ErrorResponse(401, {}, 'Product not Found')
+     }
 
-      if (deletedStatus) {
-        if (typeof deletedStatus == "string") {
-          const validData = deletedStatus.replace(
-            /([{,]\s*)(\w+):/g,
-            '$1"$2":'
-          );
-          const parseDeletedStatus = JSON.parse(validData);
-          const imageStatus = await Promise.all(
-            parseDeletedStatus?.map((data, index) =>
-              ImageItem.update(
-                { statusDeleted: data.status },
-                { where: { id: data.id } }
-              )
-            )
-          );
-        } else {
-          const imageStatus = await Promise.all(
-            deletedStatus.map((data, index) =>
-              ImageItem.update(
-                { statusDeleted: data.status },
-                { where: { id: data.id } }
-              )
-            )
-          );
-        }
+     if(!findCategory) {
+      throw new ErrorResponse(401, {}, 'Category not Found')
+     }
 
-        const findImage = await ImageItem.findAll({
-          where: { statusDeleted: true },
-        });
-
-        if (findImage.length > 0) {
-          const cloudinaryDeleted = await Promise.all(
-            findImage.map((data) =>
-              cloudinary.uploader.destroy(data.cloudinaryId)
-            )
-          );
-        }
-
-        const imageDeleted = await ImageItem.destroy({
-          where: { statusDeleted: true },
-        });
+     const category = await Category.update(
+      { categoryName },
+      {
+        where: {
+          id: categoryId,
+        },
       }
+    );
+    const result = await Item.update(
+      { productName, price, categoryId: category.id, size, color },
+      {
+        where: {
+          id: itemId,
+        },
+      }
+    );
 
-      if (req.files) {
-        const imageUpdate = await Promise.all(
-          req.files.map((file) =>
-            ImageItem.create({
-              cloudinaryId: file.filename,
-              url: file.path,
-              itemId,
-            })
+    if (deletedImage) {
+      if (typeof deletedImage == "string") {
+        const validData = deletedImage.replace(
+          /([{,]\s*)(\w+):/g,
+          '$1"$2":'
+        );
+        const parseDeletedImage = JSON.parse(validData);
+        const imageStatus = await Promise.all(
+          parseDeletedImage?.map((data, index) =>
+            ImageItem.update(
+              { statusDeleted: data.status },
+              { where: { id: data.id } }
+            )
+          )
+        );
+      } else {
+        const imageStatus = await Promise.all(
+          deletedImage.map((data, index) =>
+            ImageItem.update(
+              { statusDeleted: data.status },
+              { where: { id: data.id } }
+            )
           )
         );
       }
 
-      return new SuccessResponse(res, 200, result, "Success");
+      const findImage = await ImageItem.findAll({
+        where: { statusDeleted: true },
+      });
+
+      if (findImage.length > 0) {
+        const cloudinaryDeleted = await Promise.all(
+          findImage.map((data) =>
+            cloudinary.uploader.destroy(data.cloudinaryId)
+          )
+        );
+      }
+
+      const imageDeleted = await ImageItem.destroy({
+        where: { statusDeleted: true },
+      });
+    }
+
+    if (req.files) {
+      const imageUpdate = await Promise.all(
+        req.files.map((file) =>
+          ImageItem.create({
+            cloudinaryId: file.filename,
+            url: file.path,
+            itemId,
+          })
+        )
+      );
+    }
+
+    return new SuccessResponse(res, 200, result, "Success");
     } catch (error) {
       next(error);
     }
@@ -165,6 +176,12 @@ class ItemController {
     try {
       const { id } = req.params;
       const findImage = await ImageItem.findAll({ where: { itemId: id } });
+
+      const findProduct = await Item.findOne({ where: { id } });
+
+      if (!findProduct) {
+        throw new ErrorResponse(401, {}, "Product not found");
+      }
 
       if (findImage.length > 0) {
         const deletedCloudinary = await Promise.all(
