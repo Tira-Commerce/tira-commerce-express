@@ -52,26 +52,36 @@ class ItemController {
 
   async addItem(req, res, next) {
     try {
-      const { userId } = req.params;
+      const { userId } = req.query;
       const { productName, price, categoryName, size, color } = req.body;
-      const category = await Category.create({ categoryName });
+      const findCategory = await Category.findOne({ where: { categoryName: categoryName.toLowerCase() } });
+      let category;
+      
+      if (!findCategory) {
+        category = await Category.create({ categoryName: categoryName.toLowerCase() });
+      }
+      
       const result = await Item.create({
         userId,
         productName,
         price,
-        categoryId: category.id,
+        categoryId: findCategory ? findCategory.id : category.id,
         size,
         color,
       });
-      await Promise.all(
-        req.files.map((file) =>
-          ImageItem.create({
-            cloudinaryId: file.filename,
-            url: file.path,
-            itemId: result.id,
-          })
-        )
-      );
+
+      if(req.files) {
+        await Promise.all(
+          req.files.map((file) =>
+            ImageItem.create({
+              cloudinaryId: file.filename,
+              url: file.path,
+              itemId: result.id,
+            })
+          )
+        );
+      }
+      
       return new SuccessResponse(res, 201, result, "Success");
     } catch (error) {
       next(error);
