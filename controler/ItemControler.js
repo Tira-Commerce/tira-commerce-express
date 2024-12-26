@@ -96,7 +96,7 @@ class ItemController {
       const findProduct = await Item.findOne({ where: { id: itemId } });
       const findCategory = await Category.findOne({ where: { id: categoryId } });
      
-     if(!findProduct) {
+     if(!findProduct || !findCategory) {
       if(req.files) {
         const cloudinaryDeleted = await Promise.all(
           req.files.map((data) =>
@@ -104,18 +104,7 @@ class ItemController {
           )
         );
       }
-      throw new ErrorResponse(401, {}, 'Product not Found')
-     }
-
-     if(!findCategory) {
-      if(req.files) {
-        const cloudinaryDeleted = await Promise.all(
-          req.files.map((data) =>
-            cloudinary.uploader.destroy(data.filename)
-          )
-        );
-      }
-      throw new ErrorResponse(401, {}, 'Category not Found')
+      throw new ErrorResponse(401, {}, !findCategory ? 'Category is not found' : 'Product is not Found')
      }
 
      const category = await Category.update(
