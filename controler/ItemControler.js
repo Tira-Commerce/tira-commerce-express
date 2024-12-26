@@ -56,7 +56,7 @@ class ItemController {
       const { productName, price, categoryName, size, color } = req.body;
       const findCategory = await Category.findOne({ where: { categoryName: categoryName.toLowerCase() } });
       let category;
-      
+
       if (!findCategory) {
         category = await Category.create({ categoryName: categoryName.toLowerCase() });
       }
@@ -97,10 +97,24 @@ class ItemController {
       const findCategory = await Category.findOne({ where: { id: categoryId } });
      
      if(!findProduct) {
+      if(req.files) {
+        const cloudinaryDeleted = await Promise.all(
+          req.files.map((data) =>
+            cloudinary.uploader.destroy(data.filename)
+          )
+        );
+      }
       throw new ErrorResponse(401, {}, 'Product not Found')
      }
 
      if(!findCategory) {
+      if(req.files) {
+        const cloudinaryDeleted = await Promise.all(
+          req.files.map((data) =>
+            cloudinary.uploader.destroy(data.filename)
+          )
+        );
+      }
       throw new ErrorResponse(401, {}, 'Category not Found')
      }
 
